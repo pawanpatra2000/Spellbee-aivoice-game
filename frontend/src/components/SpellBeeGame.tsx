@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { TransportState, RTVIEvent } from "@pipecat-ai/client-js";
 import {
   usePipecatClient,
@@ -28,12 +28,16 @@ export default function SpellBeeGame({
   const [isConnecting, setIsConnecting] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [isBotSpeaking, setIsBotSpeaking] = useState(false);
+  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
 
-  // Get both audio tracks
+  // Live user input — accumulates across multiple finals in one speaking turn
+  const [liveUserText, setLiveUserText] = useState("");
+  const turnTextRef = useRef("");
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  // Audio tracks
   const botTrack = usePipecatClientMediaTrack("audio", "bot");
   const userTrack = usePipecatClientMediaTrack("audio", "local");
-
-  // Feed whichever track is active — bot when speaking, user mic otherwise
   const activeTrack = isBotSpeaking ? botTrack : userTrack;
 
   useRTVIClientEvent(
@@ -48,6 +52,7 @@ export default function SpellBeeGame({
     }, [])
   );
 
+  // Bot transcript for score parsing
   useRTVIClientEvent(
     RTVIEvent.BotTranscript,
     useCallback((data: { text: string }) => {
@@ -57,18 +62,44 @@ export default function SpellBeeGame({
     }, [])
   );
 
+  // User transcript — interim replaces current segment, final appends to turn
   useRTVIClientEvent(
     RTVIEvent.UserTranscript,
     useCallback((data: { text: string; final: boolean }) => {
-      if (data.final && data.text) {
+      if (!data.text) return;
+
+      // Cancel any pending clear
+      if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
+
+      if (data.final) {
+        // Append this final segment to the accumulated turn text
+        const separator = turnTextRef.current ? " " : "";
+        turnTextRef.current += separator + data.text;
+        setLiveUserText(turnTextRef.current);
         setMessages((prev) => [...prev, { role: "user", content: data.text }]);
+
+        // Clear display after a pause (will be cancelled if more speech comes)
+        clearTimerRef.current = setTimeout(() => {
+          setLiveUserText("");
+          turnTextRef.current = "";
+        }, 2000);
+      } else {
+        // Interim: show accumulated finals + current partial
+        const prefix = turnTextRef.current ? turnTextRef.current + " " : "";
+        setLiveUserText(prefix + data.text);
       }
     }, [])
   );
 
   useRTVIClientEvent(
     RTVIEvent.BotStartedSpeaking,
-    useCallback(() => setIsBotSpeaking(true), [])
+    useCallback(() => {
+      setIsBotSpeaking(true);
+      // Clear user text when bot starts responding
+      setLiveUserText("");
+      turnTextRef.current = "";
+      if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
+    }, [])
   );
 
   useRTVIClientEvent(
@@ -76,11 +107,25 @@ export default function SpellBeeGame({
     useCallback(() => setIsBotSpeaking(false), [])
   );
 
+  useRTVIClientEvent(
+    RTVIEvent.UserStartedSpeaking,
+    useCallback(() => {
+      setIsUserSpeaking(true);
+      // Reset for new speaking turn
+      turnTextRef.current = "";
+      setLiveUserText("");
+      if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
+    }, [])
+  );
+
+  useRTVIClientEvent(
+    RTVIEvent.UserStoppedSpeaking,
+    useCallback(() => setIsUserSpeaking(false), [])
+  );
+
   // Auto-connect on mount
   useEffect(() => {
-    const timer = setTimeout(() => {
-      handleConnect();
-    }, 100);
+    const timer = setTimeout(() => handleConnect(), 100);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -121,6 +166,8 @@ export default function SpellBeeGame({
       : difficulty === "hard"
       ? "bg-rose-50 text-rose-700"
       : "bg-amber-50 text-amber-700";
+
+  const showUserCaption = isUserSpeaking || liveUserText;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-8 animate-fade-in">
@@ -166,9 +213,16 @@ export default function SpellBeeGame({
             audioSmoothing: 0.85,
           }}
         />
-        {isBotSpeaking && (
-          <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full">
-            Pawan is speaking...
+      </div>
+
+      {/* ── Live User Input ── */}
+      <div className="h-16 flex items-center justify-center mt-4">
+        {showUserCaption && (
+          <div className="text-center animate-fade-in max-w-lg">
+            <p className="text-slate-800 text-lg font-medium tracking-wide">
+              {liveUserText}
+              {isUserSpeaking && <span className="inline-block w-1.5 h-4 bg-indigo-400 ml-0.5 animate-pulse rounded-sm align-text-bottom" />}
+            </p>
           </div>
         )}
       </div>
@@ -190,13 +244,6 @@ export default function SpellBeeGame({
             </button>
           )}
         </div>
-      )}
-
-      {/* ── Mic hint ── */}
-      {isConnected && (
-        <p className="text-center text-sm text-slate-400 mt-4">
-          Speak clearly to spell each word. Say letters one at a time.
-        </p>
       )}
     </div>
   );
