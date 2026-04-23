@@ -15,12 +15,14 @@ if [ -f "$SCRIPT_DIR/backend/.env" ]; then
 else
     echo "WARNING: No backend/.env file found."
     echo ""
-    echo "Create it with:"
-    echo "  cp .env.example backend/.env"
+    echo "Create it with these contents:"
     echo ""
-    echo "Then fill in your API keys:"
-    echo "  DEEPGRAM_API_KEY=  (https://console.deepgram.com)"
-    echo "  GOOGLE_API_KEY=    (https://aistudio.google.com/apikey)"
+    echo "  DEEPGRAM_API_KEY=your_key_here"
+    echo "  GOOGLE_API_KEY=your_key_here"
+    echo ""
+    echo "Get keys from:"
+    echo "  Deepgram: https://console.deepgram.com"
+    echo "  Google:   https://aistudio.google.com/apikey"
     echo ""
     exit 1
 fi
@@ -59,9 +61,9 @@ if [ ! -d "venv" ]; then
     $PYTHON -m venv venv
 fi
 
-echo "  Installing Python dependencies..."
 source venv/bin/activate
-pip install -r requirements.txt --quiet 2>/dev/null
+echo "  Installing Python dependencies (this may take a minute on first run)..."
+pip install -r requirements.txt -q
 
 cd "$SCRIPT_DIR"
 
@@ -71,7 +73,9 @@ cd "$SCRIPT_DIR/frontend"
 
 if [ ! -d "node_modules" ]; then
     echo "  Installing npm dependencies..."
-    npm install --silent 2>/dev/null
+    npm install
+else
+    echo "  node_modules found, skipping install"
 fi
 
 cd "$SCRIPT_DIR"
@@ -87,6 +91,7 @@ for port in 7860 5173; do
     fi
 done
 
+# --- Start Backend ---
 echo "[4/5] Starting backend server (port 7860)..."
 cd "$SCRIPT_DIR/backend"
 source venv/bin/activate
@@ -95,9 +100,25 @@ BACKEND_PID=$!
 
 cd "$SCRIPT_DIR"
 
-# Give backend a moment to start
-sleep 3
+# Wait for backend to be ready
+echo "  Waiting for backend..."
+for i in $(seq 1 30); do
+    if curl -s http://localhost:7860/api/health > /dev/null 2>&1; then
+        echo "  Backend is ready!"
+        break
+    fi
+    if ! kill -0 $BACKEND_PID 2>/dev/null; then
+        echo "  ERROR: Backend failed to start. Check your .env file and API keys."
+        exit 1
+    fi
+    sleep 1
+done
 
+if ! curl -s http://localhost:7860/api/health > /dev/null 2>&1; then
+    echo "  WARNING: Backend took too long to start, continuing anyway..."
+fi
+
+# --- Start Frontend ---
 echo "[5/5] Starting frontend dev server (port 5173)..."
 cd "$SCRIPT_DIR/frontend"
 npm run dev &
@@ -105,12 +126,17 @@ FRONTEND_PID=$!
 
 cd "$SCRIPT_DIR"
 
+# Wait for frontend to be ready
+sleep 3
+
 echo ""
 echo "============================================"
 echo "  Ready!"
 echo ""
-echo "  Frontend: http://localhost:5173"
+echo "  Open: http://localhost:5173"
+echo ""
 echo "  Backend:  http://localhost:7860"
+echo "  Frontend: http://localhost:5173"
 echo "============================================"
 echo ""
 echo "Press Ctrl+C to stop both servers."
@@ -120,6 +146,7 @@ cleanup() {
     echo ""
     echo "Shutting down..."
     kill $BACKEND_PID $FRONTEND_PID 2>/dev/null
+    wait $BACKEND_PID $FRONTEND_PID 2>/dev/null
     exit 0
 }
 

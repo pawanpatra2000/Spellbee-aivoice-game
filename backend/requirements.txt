@@ -1,4 +1,5 @@
-pipecat-ai[smallwebrtc,google,deepgram]
+pipecat-ai[webrtc,google,deepgram]
 fastapi
 uvicorn[standard]
 python-dotenv
+loguru

@@ -23,7 +23,7 @@ export default function Lobby({
   onShowLeaderboard: () => void;
 }) {
   const [name, setName] = useState(() => localStorage.getItem("spellbee_name") || "");
-  const [difficulty, setDifficulty] = useState("medium");
+  const [difficulty, setDifficulty] = useState("easy");
   const [recentGames, setRecentGames] = useState<RecentGame[]>([]);
   const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
   const [loading, setLoading] = useState(false);
