@@ -20,7 +20,7 @@ from app.bot.processors import GameStateProcessor
 from app.game.prompts import build_system_prompt
 
 
-async def run_bot(connection: SmallWebRTCConnection):
+async def run_bot(connection: SmallWebRTCConnection, player_name: str = "Player", difficulty: str = "medium"):
     """Create and run the full Pipecat pipeline for one session."""
 
     # ── Transport ──────────────────────────────────────────
@@ -46,7 +46,7 @@ async def run_bot(connection: SmallWebRTCConnection):
     llm = GoogleLLMService(
         model=settings.GOOGLE_MODEL,
         api_key=settings.GOOGLE_API_KEY,
-        system_instruction=build_system_prompt(),
+        system_instruction=build_system_prompt(player_name, difficulty),
     )
 
     # ── Context ────────────────────────────────────────────
@@ -61,7 +61,11 @@ async def run_bot(connection: SmallWebRTCConnection):
     context_aggregator = LLMContextAggregatorPair(context)
 
     # ── Custom Processor ───────────────────────────────────
-    game_state = GameStateProcessor(name="GameStateProcessor")
+    game_state = GameStateProcessor(
+        player_name=player_name,
+        difficulty=difficulty,
+        name="GameStateProcessor",
+    )
 
     # ── Pipeline ───────────────────────────────────────────
     pipeline = Pipeline(
@@ -89,12 +93,15 @@ async def run_bot(connection: SmallWebRTCConnection):
     # ── Event Handlers ─────────────────────────────────────
     @transport.event_handler("on_client_connected")
     async def on_client_connected(transport, client):
-        logger.info("Client connected")
+        logger.info(f"Client connected: {player_name} ({difficulty})")
         await task.queue_frames([LLMContextFrame(context)])
 
     @transport.event_handler("on_client_disconnected")
     async def on_client_disconnected(transport, client):
         logger.info("Client disconnected")
+        # Save game if it wasn't saved via natural game end
+        if game_state.game_active and not game_state._saved:
+            game_state._save_game()
         await task.queue_frame(EndFrame())
 
     # ── Run ────────────────────────────────────────────────
