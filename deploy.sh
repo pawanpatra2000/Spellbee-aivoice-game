@@ -61,7 +61,7 @@ fi
 echo "[1/8] Installing system dependencies..."
 apt-get update -qq
 apt-get install -y -qq python3 python3-venv python3-pip nginx certbot python3-certbot-nginx curl git build-essential \
-    libgl1-mesa-glx libglib2.0-0
+    libgl1 libglib2.0-0
 
 # Install Node.js 20 if not present
 if ! command -v node &>/dev/null; then
