@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from "react";
 import { TransportState, RTVIEvent } from "@pipecat-ai/client-js";
 import {
   usePipecatClient,
+  usePipecatClientMediaTrack,
   useRTVIClientEvent,
 } from "@pipecat-ai/client-react";
-import { PlasmaVisualizer } from "@pipecat-ai/voice-ui-kit/webgl";
+import { Plasma } from "@pipecat-ai/voice-ui-kit/webgl";
 
 interface Message {
   role: "user" | "assistant";
@@ -28,6 +29,13 @@ export default function SpellBeeGame({
   const [messages, setMessages] = useState<Message[]>([]);
   const [isBotSpeaking, setIsBotSpeaking] = useState(false);
 
+  // Get both audio tracks
+  const botTrack = usePipecatClientMediaTrack("audio", "bot");
+  const userTrack = usePipecatClientMediaTrack("audio", "local");
+
+  // Feed whichever track is active — bot when speaking, user mic otherwise
+  const activeTrack = isBotSpeaking ? botTrack : userTrack;
+
   useRTVIClientEvent(
     RTVIEvent.TransportStateChanged,
     useCallback((state: TransportState) => {
@@ -40,7 +48,6 @@ export default function SpellBeeGame({
     }, [])
   );
 
-  // Still collect messages for score parsing, just don't display them
   useRTVIClientEvent(
     RTVIEvent.BotTranscript,
     useCallback((data: { text: string }) => {
@@ -151,7 +158,14 @@ export default function SpellBeeGame({
 
       {/* ── Visualizer ── */}
       <div className="visualizer-container relative">
-        <PlasmaVisualizer />
+        <Plasma
+          audioTrack={activeTrack}
+          initialConfig={{
+            backgroundColor: "#ffffff",
+            audioSensitivity: 1.5,
+            audioSmoothing: 0.85,
+          }}
+        />
         {isBotSpeaking && (
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/50 backdrop-blur-sm text-white text-xs px-3 py-1 rounded-full">
             Pawan is speaking...
@@ -207,17 +221,14 @@ function parseScore(messages: Message[]): { score: number; wordNumber: number } 
     if (msg.role !== "assistant") continue;
     const text = msg.content.toLowerCase();
 
-    // Count "that is correct" / "that's correct"
     if (/that(?:'s| is) correct/i.test(text)) {
       correct++;
     }
 
-    // Count "not quite" / "incorrect"
     if (/not quite|that(?:'s| is) incorrect/i.test(text)) {
       incorrect++;
     }
 
-    // Word number (digits or words)
     const wordMatch = text.match(
       /word\s+(?:number\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten)/i
     );
