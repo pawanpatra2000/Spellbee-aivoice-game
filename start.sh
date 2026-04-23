@@ -1,66 +1,125 @@
 #!/bin/bash
 set -e
 
+# Get the directory where this script lives
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 echo "============================================"
-echo "  Spell Bee Voice Bot - Starting Up"
+echo "  Spell Bee Voice Bot — Setup & Start"
 echo "============================================"
 echo ""
 
-# Check for .env file
-if [ ! -f backend/.env ]; then
-    echo "ERROR: backend/.env not found!"
+# --- Check for .env ---
+if [ -f "$SCRIPT_DIR/backend/.env" ]; then
+    echo "Found backend/.env file"
+else
+    echo "WARNING: No backend/.env file found."
     echo ""
-    echo "Run these commands first:"
+    echo "Create it with:"
     echo "  cp .env.example backend/.env"
-    echo "  # Then edit backend/.env and add your API keys"
+    echo ""
+    echo "Then fill in your API keys:"
+    echo "  DEEPGRAM_API_KEY=  (https://console.deepgram.com)"
+    echo "  GOOGLE_API_KEY=    (https://aistudio.google.com/apikey)"
     echo ""
     exit 1
 fi
 
-# Install backend dependencies
-echo "[1/4] Installing backend dependencies..."
-cd backend
-pip install -r requirements.txt -q
-cd ..
+# --- Find Python ---
+PYTHON=""
+for cmd in python3.13 python3.12 python3.11 python3; do
+    if command -v "$cmd" &>/dev/null; then
+        PYTHON="$cmd"
+        break
+    fi
+done
 
-# Install frontend dependencies
-echo "[2/4] Installing frontend dependencies..."
-cd frontend
-npm install --silent 2>/dev/null
-cd ..
+if [ -z "$PYTHON" ]; then
+    echo "ERROR: Python 3.11+ is required but not found."
+    exit 1
+fi
 
-# Start backend
-echo "[3/4] Starting backend server on port 7860..."
-cd backend
+echo "Using Python: $($PYTHON --version)"
+
+# --- Check Node.js ---
+if ! command -v node &>/dev/null; then
+    echo "ERROR: Node.js 18+ is required but not found."
+    exit 1
+fi
+
+echo "Using Node:   $(node --version)"
+echo ""
+
+# --- Backend Setup ---
+echo "[1/5] Setting up Python backend..."
+cd "$SCRIPT_DIR/backend"
+
+if [ ! -d "venv" ]; then
+    echo "  Creating virtual environment..."
+    $PYTHON -m venv venv
+fi
+
+echo "  Installing Python dependencies..."
+source venv/bin/activate
+pip install -r requirements.txt --quiet 2>/dev/null
+
+cd "$SCRIPT_DIR"
+
+# --- Frontend Setup ---
+echo "[2/5] Setting up React frontend..."
+cd "$SCRIPT_DIR/frontend"
+
+if [ ! -d "node_modules" ]; then
+    echo "  Installing npm dependencies..."
+    npm install --silent 2>/dev/null
+fi
+
+cd "$SCRIPT_DIR"
+
+# --- Kill existing processes on our ports ---
+echo "[3/5] Freeing ports..."
+for port in 7860 5173; do
+    pids=$(lsof -t -i :"$port" 2>/dev/null || true)
+    if [ -n "$pids" ]; then
+        echo "  Killing existing processes on port $port"
+        kill -9 $pids 2>/dev/null || true
+        sleep 1
+    fi
+done
+
+echo "[4/5] Starting backend server (port 7860)..."
+cd "$SCRIPT_DIR/backend"
+source venv/bin/activate
 python main.py &
 BACKEND_PID=$!
-cd ..
+
+cd "$SCRIPT_DIR"
 
 # Give backend a moment to start
-sleep 2
+sleep 3
 
-# Start frontend
-echo "[4/4] Starting frontend on port 5173..."
-cd frontend
+echo "[5/5] Starting frontend dev server (port 5173)..."
+cd "$SCRIPT_DIR/frontend"
 npm run dev &
 FRONTEND_PID=$!
-cd ..
+
+cd "$SCRIPT_DIR"
 
 echo ""
 echo "============================================"
-echo "  App is running!"
+echo "  Ready!"
+echo ""
 echo "  Frontend: http://localhost:5173"
 echo "  Backend:  http://localhost:7860"
 echo "============================================"
-echo "Press Ctrl+C to stop both servers."
 echo ""
+echo "Press Ctrl+C to stop both servers."
 
-# Handle cleanup on exit
+# Cleanup on exit
 cleanup() {
     echo ""
     echo "Shutting down..."
-    kill $BACKEND_PID 2>/dev/null
-    kill $FRONTEND_PID 2>/dev/null
+    kill $BACKEND_PID $FRONTEND_PID 2>/dev/null
     exit 0
 }
 

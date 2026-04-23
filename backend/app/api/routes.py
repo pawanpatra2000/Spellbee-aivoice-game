@@ -1,34 +1,42 @@
 """API routes for the Spell Bee bot."""
 
-import asyncio
-
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, BackgroundTasks
 from loguru import logger
 
-from app.core.daily import create_room_and_token
+from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
+from pipecat.transports.smallwebrtc.request_handler import (
+    SmallWebRTCPatchRequest,
+    SmallWebRTCRequest,
+    SmallWebRTCRequestHandler,
+)
+
 from app.bot.pipeline import run_bot
 
 router = APIRouter()
 
+webrtc_handler = SmallWebRTCRequestHandler()
 
-@router.post("/connect")
-async def connect():
-    """Create a Daily room and spawn the Spell Bee bot.
 
-    The bot runs as a background task so the HTTP response
-    returns immediately with room credentials for the client.
-    """
-    try:
-        room_url, token = await create_room_and_token()
-    except Exception as e:
-        logger.error(f"Failed to create Daily room: {e}")
-        raise HTTPException(status_code=500, detail="Failed to create voice session")
+@router.post("/offer")
+async def offer(request: SmallWebRTCRequest, background_tasks: BackgroundTasks):
+    """Handle WebRTC offer and spawn the Spell Bee bot."""
 
-    # Spawn bot in background — don't block the HTTP response
-    asyncio.create_task(run_bot(room_url, token))
-    logger.info(f"Bot spawned for room: {room_url}")
+    async def on_connection(connection: SmallWebRTCConnection):
+        background_tasks.add_task(run_bot, connection)
 
-    return {"room_url": room_url, "token": token}
+    answer = await webrtc_handler.handle_web_request(
+        request=request,
+        webrtc_connection_callback=on_connection,
+    )
+    logger.info("WebRTC connection established, bot spawned")
+    return answer
+
+
+@router.patch("/offer")
+async def ice_candidate(request: SmallWebRTCPatchRequest):
+    """Handle trickle ICE candidates from the browser."""
+    await webrtc_handler.handle_patch_request(request)
+    return {"status": "ok"}
 
 
 @router.get("/health")

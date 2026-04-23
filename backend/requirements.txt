@@ -1,5 +1,4 @@
-pipecat-ai[daily,google,deepgram,silero]
+pipecat-ai[smallwebrtc,google,deepgram]
 fastapi
 uvicorn[standard]
 python-dotenv
-aiohttp

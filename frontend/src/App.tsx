@@ -1,26 +1,30 @@
-import { RTVIClient } from "@pipecat-ai/client-js";
-import { DailyTransport } from "@pipecat-ai/daily-transport";
-import { RTVIClientProvider, RTVIClientAudio } from "@pipecat-ai/client-react";
+import { PipecatClient } from "@pipecat-ai/client-js";
+import { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport";
+import {
+  PipecatClientProvider,
+  PipecatClientAudio,
+} from "@pipecat-ai/client-react";
 import SpellBeeGame from "./components/SpellBeeGame";
+import "./App.css";
 
-const client = new RTVIClient({
-  transport: new DailyTransport(),
-  params: {
-    baseUrl: "/api",
-    endpoints: {
-      connect: "/connect",
-    },
-  },
+const client = new PipecatClient({
+  transport: new SmallWebRTCTransport(),
   enableMic: true,
   enableCam: false,
 });
 
 function App() {
   return (
-    <RTVIClientProvider client={client}>
-      <RTVIClientAudio />
-      <SpellBeeGame />
-    </RTVIClientProvider>
+    <PipecatClientProvider client={client}>
+      <PipecatClientAudio />
+      <div className="spell-bee-container">
+        <div className="header">
+          <h1>Spell Bee</h1>
+          <p>Voice-powered spelling bee game</p>
+        </div>
+        <SpellBeeGame />
+      </div>
+    </PipecatClientProvider>
   );
 }
 

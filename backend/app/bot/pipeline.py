@@ -2,43 +2,40 @@
 
 from loguru import logger
 
-from pipecat.audio.vad.silero import SileroVADAnalyzer
-from pipecat.frames.frames import EndFrame, LLMMessagesFrame
+from pipecat.frames.frames import EndFrame, LLMContextFrame
 from pipecat.pipeline.pipeline import Pipeline
 from pipecat.pipeline.runner import PipelineRunner
 from pipecat.pipeline.task import PipelineParams, PipelineTask
-from pipecat.processors.aggregators.openai_llm_context import OpenAILLMContext
+from pipecat.processors.aggregators.llm_context import LLMContext
+from pipecat.processors.aggregators.llm_response_universal import LLMContextAggregatorPair
 from pipecat.services.deepgram.stt import DeepgramSTTService
 from pipecat.services.deepgram.tts import DeepgramTTSService
 from pipecat.services.google.llm import GoogleLLMService
-from pipecat.transports.services.daily import DailyParams, DailyTransport
+from pipecat.transports.base_transport import TransportParams
+from pipecat.transports.smallwebrtc.transport import SmallWebRTCTransport
+from pipecat.transports.smallwebrtc.connection import SmallWebRTCConnection
 
 from app.config import settings
 from app.bot.processors import GameStateProcessor
 from app.game.prompts import build_system_prompt
 
 
-async def run_bot(room_url: str, token: str):
+async def run_bot(connection: SmallWebRTCConnection):
     """Create and run the full Pipecat pipeline for one session."""
 
     # ── Transport ──────────────────────────────────────────
-    transport = DailyTransport(
-        room_url,
-        token,
-        "Spell Bee Bot",
-        DailyParams(
+    transport = SmallWebRTCTransport(
+        webrtc_connection=connection,
+        params=TransportParams(
             audio_in_enabled=True,
             audio_out_enabled=True,
-            transcription_enabled=False,
-            vad_enabled=True,
-            vad_analyzer=SileroVADAnalyzer(),
         ),
     )
 
     # ── Services ───────────────────────────────────────────
     stt = DeepgramSTTService(
         api_key=settings.DEEPGRAM_API_KEY,
-        live_options={"model": settings.DEEPGRAM_STT_MODEL, "language": "en"},
+        model=settings.DEEPGRAM_STT_MODEL,
     )
 
     tts = DeepgramTTSService(
@@ -49,30 +46,24 @@ async def run_bot(room_url: str, token: str):
     llm = GoogleLLMService(
         model=settings.GOOGLE_MODEL,
         api_key=settings.GOOGLE_API_KEY,
+        system_instruction=build_system_prompt(),
     )
 
     # ── Context ────────────────────────────────────────────
-    system_prompt = build_system_prompt()
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {
-            "role": "user",
-            "content": "Start the spell bee game. Introduce yourself and present the first word.",
-        },
-    ]
-    context = OpenAILLMContext(messages)
-    context_aggregator = llm.create_context_aggregator(context)
+    context = LLMContext(
+        messages=[
+            {
+                "role": "user",
+                "content": "Start the spell bee game. Introduce yourself and present the first word.",
+            }
+        ]
+    )
+    context_aggregator = LLMContextAggregatorPair(context)
 
     # ── Custom Processor ───────────────────────────────────
     game_state = GameStateProcessor(name="GameStateProcessor")
 
     # ── Pipeline ───────────────────────────────────────────
-    #
-    # Audio Flow:
-    #   User Mic → Daily → STT → Context(user) → LLM → GameState → TTS → Daily → Speaker
-    #                                                                        ↓
-    #                                                              Context(assistant)
-    #
     pipeline = Pipeline(
         [
             transport.input(),
@@ -96,14 +87,14 @@ async def run_bot(room_url: str, token: str):
     )
 
     # ── Event Handlers ─────────────────────────────────────
-    @transport.event_handler("on_first_participant_joined")
-    async def on_first_participant_joined(transport, participant):
-        logger.info(f"Participant joined: {participant['id']}")
-        await task.queue_frames([LLMMessagesFrame(messages)])
+    @transport.event_handler("on_client_connected")
+    async def on_client_connected(transport, client):
+        logger.info("Client connected")
+        await task.queue_frames([LLMContextFrame(context)])
 
-    @transport.event_handler("on_participant_left")
-    async def on_participant_left(transport, participant, reason):
-        logger.info(f"Participant left: {participant['id']}")
+    @transport.event_handler("on_client_disconnected")
+    async def on_client_disconnected(transport, client):
+        logger.info("Client disconnected")
         await task.queue_frame(EndFrame())
 
     # ── Run ────────────────────────────────────────────────

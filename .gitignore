@@ -16,9 +16,13 @@ env/
 node_modules/
 frontend/dist/
 
+# Database
+*.db
+
 # IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 .DS_Store
+.env.example

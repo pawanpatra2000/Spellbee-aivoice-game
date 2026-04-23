@@ -13,9 +13,6 @@ class Settings:
     HOST: str = os.getenv("HOST", "0.0.0.0")
     PORT: int = int(os.getenv("PORT", "7860"))
 
-    DAILY_API_KEY: str = os.getenv("DAILY_API_KEY", "")
-    DAILY_API_URL: str = "https://api.daily.co/v1"
-
     DEEPGRAM_API_KEY: str = os.getenv("DEEPGRAM_API_KEY", "")
 
     GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")

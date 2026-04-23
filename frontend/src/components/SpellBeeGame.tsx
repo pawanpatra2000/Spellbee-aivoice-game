@@ -1,20 +1,16 @@
 import { useCallback, useState } from "react";
 import { TransportState, RTVIEvent } from "@pipecat-ai/client-js";
-import { useRTVIClient, useRTVIClientEvent } from "@pipecat-ai/client-react";
+import {
+  usePipecatClient,
+  useRTVIClientEvent,
+} from "@pipecat-ai/client-react";
+import { PlasmaVisualizer } from "@pipecat-ai/voice-ui-kit/webgl";
 import GameStatus from "./GameStatus";
-import Transcript from "./Transcript";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
 
 export default function SpellBeeGame() {
-  const client = useRTVIClient();
+  const client = usePipecatClient();
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
-  const [isBotSpeaking, setIsBotSpeaking] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
 
   useRTVIClientEvent(
     RTVIEvent.TransportStateChanged,
@@ -28,47 +24,15 @@ export default function SpellBeeGame() {
     }, [])
   );
 
-  useRTVIClientEvent(
-    RTVIEvent.BotStartedSpeaking,
-    useCallback(() => setIsBotSpeaking(true), [])
-  );
-
-  useRTVIClientEvent(
-    RTVIEvent.BotStoppedSpeaking,
-    useCallback(() => setIsBotSpeaking(false), [])
-  );
-
-  // Capture bot transcript
-  useRTVIClientEvent(
-    RTVIEvent.BotTranscript,
-    useCallback((data: { text: string }) => {
-      if (data.text) {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", content: data.text },
-        ]);
-      }
-    }, [])
-  );
-
-  // Capture user transcript
-  useRTVIClientEvent(
-    RTVIEvent.UserTranscript,
-    useCallback((data: { text: string; final: boolean }) => {
-      if (data.final && data.text) {
-        setMessages((prev) => [
-          ...prev,
-          { role: "user", content: data.text },
-        ]);
-      }
-    }, [])
-  );
-
   const handleConnect = async () => {
     if (!client) return;
     try {
       setIsConnecting(true);
-      await client.connect();
+      await client.connect({
+        webrtcRequestParams: {
+          endpoint: "/api/offer",
+        },
+      });
     } catch (err) {
       console.error("Failed to connect:", err);
       setIsConnecting(false);
@@ -80,20 +44,18 @@ export default function SpellBeeGame() {
     try {
       await client.disconnect();
       setIsConnected(false);
-      setIsBotSpeaking(false);
     } catch (err) {
       console.error("Failed to disconnect:", err);
     }
   };
 
   return (
-    <div className="spell-bee-container">
-      <div className="header">
-        <h1>Spell Bee</h1>
-        <p>Voice-powered spelling bee game</p>
-      </div>
-
+    <>
       <GameStatus isConnected={isConnected} isConnecting={isConnecting} />
+
+      <div className="visualizer-container">
+        <PlasmaVisualizer />
+      </div>
 
       <div className="controls">
         {!isConnected ? (
@@ -110,19 +72,6 @@ export default function SpellBeeGame() {
           </button>
         )}
       </div>
-
-      {isBotSpeaking && (
-        <div className="bot-speaking">
-          <div className="speaking-indicator">
-            <span></span>
-            <span></span>
-            <span></span>
-          </div>
-          Bot is speaking...
-        </div>
-      )}
-
-      <Transcript messages={messages} />
-    </div>
+    </>
   );
 }
