@@ -26,3 +26,4 @@ frontend/dist/
 *.swo
 .DS_Store
 .env.example
+backend/.env
