@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PipecatClient } from "@pipecat-ai/client-js";
+import { PipecatClient as PipecatClientBase } from "@pipecat-ai/client-js";
 import { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport";
 import {
   PipecatClientProvider,
@@ -9,11 +9,11 @@ import Lobby from "./components/Lobby";
 import SpellBeeGame from "./components/SpellBeeGame";
 import Leaderboard from "./components/Leaderboard";
 
-const client = new PipecatClient({
+const client = new PipecatClientBase({
   transport: new SmallWebRTCTransport(),
   enableMic: true,
   enableCam: false,
-});
+}) as any;
 
 type View = "lobby" | "game" | "leaderboard";
 
