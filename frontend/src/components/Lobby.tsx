@@ -61,7 +61,7 @@ export default function Lobby({
   ];
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-10 animate-fade-in">
+    <div className="max-w-4xl mx-auto px-4 py-10 animate-fade-in" id="top">
       {/* Hero */}
       <div className="text-center mb-10">
         <span className="text-6xl mb-4 block animate-float">🐝</span>

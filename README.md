@@ -1,99 +1,150 @@
-# Spell Bee Voice Bot
+# Spell Bee — AI Voice Game
 
-A voice-based spelling bee game built with [Pipecat](https://github.com/pipecat-ai/pipecat). The bot speaks a word, the user spells it out loud, and the bot evaluates the response.
+A real-time, voice-powered spelling bee game where an AI host speaks words, listens to your spelling, and judges your answers — all through the browser with no push-to-talk, no typing.
+
+Live: **https://spellbee.pawanpatra.com**
+
+---
+
+## What It Does
+
+- An AI host (powered by Gemini) announces a word with its definition
+- You spell it out loud, letter by letter
+- Deepgram transcribes your speech in real time
+- The AI evaluates your spelling instantly and gives feedback
+- 10 rounds per game with Easy / Medium / Hard difficulty
+- Scores are saved to a leaderboard after every game
+
+---
 
 ## Architecture
 
 ```
-React Frontend  <--WebRTC (Daily)--> Pipecat Pipeline (FastAPI Backend)
-                                          |
-                                    Deepgram STT (Speech-to-Text)
-                                          |
-                                    Gemini LLM (Game Host)
-                                          |
-                                    Deepgram TTS (Text-to-Speech)
+Browser (React + WebRTC)
+        │
+        │  WebRTC (SmallWebRTC — no third-party infra)
+        ▼
+FastAPI Backend (Uvicorn)
+        │
+        └── Pipecat Voice Pipeline
+              ├── Deepgram STT   →  speech to text (Nova-2)
+              ├── Gemini LLM     →  game host + word judge (Gemini Flash)
+              └── Deepgram TTS   →  text to speech (Aura voice)
 ```
 
-**Backend** (`backend/`): FastAPI server that creates Daily rooms and runs the Pipecat voice pipeline. The pipeline uses Deepgram for speech recognition and synthesis, Gemini as the AI game host, and a custom `GameStateProcessor` frame processor to track game events.
+Key design choice: uses **Pipecat's SmallWebRTC** transport — no Daily.co or other paid WebRTC infrastructure. The server handles peer connections directly.
 
-**Frontend** (`frontend/`): React app (Vite) that connects to the bot via Daily's WebRTC transport. Shows a real-time transcript and game status.
+---
 
-## Prerequisites
+## Tech Stack
 
-- Python 3.10+
-- Node.js 18+
-- API keys for:
-  - [Daily](https://dashboard.daily.co/developers) (WebRTC transport)
-  - [Deepgram](https://console.deepgram.com) (STT + TTS)
-  - [Google AI Studio](https://aistudio.google.com/apikey) (Gemini LLM)
+| Layer | Technology |
+|---|---|
+| Voice Pipeline | Pipecat 1.5 |
+| WebRTC Transport | SmallWebRTC (self-hosted, no third-party) |
+| Speech-to-Text | Deepgram Nova-2 |
+| Text-to-Speech | Deepgram Aura (aura-asteria-en) |
+| LLM / Game Host | Google Gemini Flash |
+| Backend | FastAPI + Uvicorn (Python 3.12) |
+| Frontend | React 19 + TypeScript + Vite 6 |
+| Styling | Tailwind CSS v4 |
+| Voice UI | Pipecat Voice UI Kit (WebGL plasma visualizer) |
+| Database | SQLite (scores + leaderboard) |
+| Infra | GCP VM + Nginx + systemd + Let's Encrypt SSL |
 
-## Setup
-
-1. **Clone the repo and set up environment variables:**
-
-```bash
-cp .env.example backend/.env
-# Edit backend/.env and add your API keys
-```
-
-2. **Run the app:**
-
-```bash
-chmod +x start.sh
-./start.sh
-```
-
-3. **Open the app:** Visit [http://localhost:5173](http://localhost:5173)
-
-4. **Play:** Click "Start Game", allow microphone access, and start spelling!
-
-## How It Works
-
-1. User clicks "Start Game" in the React frontend
-2. Frontend calls `POST /api/connect` on the FastAPI backend
-3. Backend creates a Daily room + token, spawns the Pipecat bot
-4. Frontend joins the Daily room via WebRTC
-5. Bot introduces itself and presents the first word
-6. User spells the word aloud, bot evaluates and tracks score
-7. Game continues for 10 rounds or until user says "quit"
+---
 
 ## Project Structure
 
 ```
 backend/
-  main.py                  - Entry point (uvicorn runner)
-  requirements.txt
+  main.py                 Entry point
   app/
-    __init__.py            - FastAPI app factory
-    config.py              - Centralized settings from .env
+    __init__.py           FastAPI app factory
+    config.py             Settings from environment
     api/
-      routes.py            - POST /api/connect, GET /api/health
+      routes.py           POST /api/session, POST /api/offer, GET /api/leaderboard
     bot/
-      pipeline.py          - Pipecat pipeline assembly
-      processors.py        - Custom GameStateProcessor frame processor
-    core/
-      daily.py             - Daily room & token creation
+      pipeline.py         Pipecat pipeline (STT → LLM → TTS)
+      processors.py       GameStateProcessor — tracks score, saves to DB
     game/
-      words.py             - Word list (easy/medium/hard)
-      prompts.py           - Gemini system prompt for spell bee host
+      prompts.py          Gemini system prompt (difficulty-aware game host)
+    db.py                 SQLite — save game, leaderboard queries
 
 frontend/
   src/
-    App.tsx                - Pipecat client setup
+    App.tsx               Pipecat client + WebRTC setup
     components/
-      SpellBeeGame.tsx     - Main game UI
-      GameStatus.tsx       - Connection status indicator
-      Transcript.tsx       - Conversation message display
+      Lobby.tsx           Game start, difficulty picker, recent games
+      SpellBeeGame.tsx    Live game UI, voice visualizer, transcript
+      Leaderboard.tsx     Top scores table
 ```
 
-## Tech Stack
+---
 
-| Component | Technology |
-|-----------|-----------|
-| Voice Pipeline | Pipecat |
-| Transport | Daily (WebRTC) |
-| STT | Deepgram Nova-2 |
-| TTS | Deepgram Aura |
-| LLM | Google Gemini 2.0 Flash |
-| Backend | FastAPI + Uvicorn |
-| Frontend | React + Vite + TypeScript |
+## How It Works (Technical Flow)
+
+1. User fills in name + difficulty → `POST /api/session` returns a `session_id`
+2. Pipecat client sends a WebRTC SDP offer to `POST /api/offer?session_id=...`
+3. Backend creates a `SmallWebRTCConnection`, performs ICE negotiation, spawns the Pipecat pipeline in a background task
+4. Pipeline runs: audio in → Deepgram STT → Gemini LLM → Deepgram TTS → audio out
+5. A custom `GameStateProcessor` frame processor intercepts bot transcripts to detect game events (correct/wrong/game-over) and writes results to SQLite
+6. On disconnect, score is saved and shown on the leaderboard
+
+---
+
+## Running Locally
+
+**Requirements:** Python 3.12+, Node.js 22+, API keys for Deepgram and Google AI Studio
+
+```bash
+# Backend
+cd backend
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+
+# Create backend/.env
+cp ../.env.example .env
+# Fill in: DEEPGRAM_API_KEY, GOOGLE_API_KEY
+
+python main.py
+# Backend runs on http://localhost:8000
+```
+
+```bash
+# Frontend
+cd frontend
+npm install
+npm run dev
+# Frontend runs on http://localhost:5173
+```
+
+Open http://localhost:5173, allow microphone access, and start spelling.
+
+---
+
+## Deployment
+
+Deployed on a GCP VM (Ubuntu) with:
+- **systemd** services for both backend and frontend
+- **Nginx** as reverse proxy routing `/api/*` to backend (8000) and `/` to frontend (5173)
+- **Let's Encrypt** SSL via Certbot
+- **STUN servers** (Google) for WebRTC NAT traversal
+
+See `deployment/` for service files, Nginx config, and deploy script.
+
+---
+
+## Skills Demonstrated
+
+- Real-time voice AI pipeline with Pipecat (STT → LLM → TTS)
+- WebRTC peer connection handling without third-party infrastructure
+- Custom Pipecat frame processor for game state management
+- FastAPI async backend with background tasks
+- React + TypeScript with real-time audio/transcript events
+- WebGL audio visualizer via Pipecat Voice UI Kit
+- Full production deployment: GCP VM, Nginx, systemd, SSL
+
+---
+
+Built by **Pawan Patra**
