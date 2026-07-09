@@ -15,7 +15,12 @@ from app.db import get_leaderboard, get_recent_games, get_player_stats
 
 router = APIRouter()
 
-webrtc_handler = SmallWebRTCRequestHandler()
+webrtc_handler = SmallWebRTCRequestHandler(
+    ice_servers=[
+        {"urls": "stun:stun.l.google.com:19302"},
+        {"urls": "stun:stun1.l.google.com:19302"},
+    ]
+)
 
 
 # Store player info per connection (keyed by SDP offer hash)
