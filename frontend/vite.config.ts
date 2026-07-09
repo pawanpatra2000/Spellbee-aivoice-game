@@ -13,4 +13,8 @@ export default defineConfig({
       },
     },
   },
+  preview: {
+    port: 5173,
+    allowedHosts: ["spellbee.pawanpatra.com", "support.pawanpatra.com", "localhost"],
+  },
 });

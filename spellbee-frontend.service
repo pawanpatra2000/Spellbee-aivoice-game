@@ -1,0 +1,18 @@
+[Unit]
+Description=Spellbee React Frontend (Vite Preview)
+After=network.target
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Service]
+Type=simple
+WorkingDirectory=/root/spellbee/frontend
+Environment="PATH=/root/spellbee/frontend/node_modules/.bin:/usr/local/bin:/usr/bin"
+ExecStart=/root/spellbee/frontend/node_modules/.bin/vite preview --host 127.0.0.1 --port 5173
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
