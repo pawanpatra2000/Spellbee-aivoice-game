@@ -1,0 +1,17 @@
+[Unit]
+Description=Spellbee Backend (FastAPI / uvicorn)
+After=network.target
+StartLimitBurst=5
+StartLimitIntervalSec=60
+
+[Service]
+Type=simple
+WorkingDirectory=/root/spellbee/backend
+ExecStart=/bin/bash /root/spellbee/start-backend.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

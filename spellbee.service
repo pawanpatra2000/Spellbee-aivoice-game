@@ -1,0 +1,15 @@
+[Unit]
+Description=Spellbee Application (Backend + Frontend)
+After=network.target
+StartLimitBurst=5
+StartLimitIntervalSec=60
+Requires=spellbee-backend.service spellbee-frontend.service
+After=spellbee-backend.service spellbee-frontend.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/bin/true
+
+[Install]
+WantedBy=multi-user.target
