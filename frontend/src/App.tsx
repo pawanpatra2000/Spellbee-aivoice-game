@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { PipecatClient as PipecatClientBase } from "@pipecat-ai/client-js";
 import { SmallWebRTCTransport } from "@pipecat-ai/small-webrtc-transport";
 import {
@@ -9,16 +9,18 @@ import Lobby from "./components/Lobby";
 import SpellBeeGame from "./components/SpellBeeGame";
 import Leaderboard from "./components/Leaderboard";
 
-const client = new PipecatClientBase({
-  transport: new SmallWebRTCTransport({
-    iceServers: [
-      { urls: "stun:stun.l.google.com:19302" },
-      { urls: "stun:stun1.l.google.com:19302" },
-    ],
-  }),
-  enableMic: true,
-  enableCam: false,
-}) as any;
+function createClient() {
+  return new PipecatClientBase({
+    transport: new SmallWebRTCTransport({
+      iceServers: [
+        { urls: "stun:stun.l.google.com:19302" },
+        { urls: "stun:stun1.l.google.com:19302" },
+      ],
+    }),
+    enableMic: true,
+    enableCam: false,
+  }) as any;
+}
 
 type View = "lobby" | "game" | "leaderboard";
 
@@ -27,6 +29,9 @@ function App() {
   const [playerName, setPlayerName] = useState("");
   const [difficulty, setDifficulty] = useState("medium");
   const [sessionId, setSessionId] = useState("");
+  // new client instance created for every game session
+  const [clientKey, setClientKey] = useState(0);
+  const client = useMemo(() => createClient(), [clientKey]);
 
   const handleStart = async (name: string, diff: string) => {
     setPlayerName(name);
@@ -44,11 +49,13 @@ function App() {
   };
 
   const handleGameEnd = () => {
+    // bump key so next game gets a fresh client with clean WebRTC state
+    setClientKey((k) => k + 1);
     setView("lobby");
   };
 
   return (
-    <PipecatClientProvider client={client}>
+    <PipecatClientProvider key={clientKey} client={client}>
       <PipecatClientAudio />
 
       <div className="min-h-screen flex flex-col">
