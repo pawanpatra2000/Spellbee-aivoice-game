@@ -1,0 +1,223 @@
+================================================================================
+SPELLBEE DEPLOYMENT - COMMANDS FOR SERVER
+================================================================================
+
+Copy & paste each section in order
+
+================================================================================
+SECTION 1: PREREQUISITES (Run First)
+================================================================================
+
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip nodejs npm nginx certbot python3-certbot-nginx curl git redis-server
+
+
+================================================================================
+SECTION 2: CLONE & PREPARE SPELLBEE
+================================================================================
+
+cd /root
+git clone https://github.com/YOUR_USER/Spellbee-aivoice-game.git spellbee
+cd spellbee
+cp .env.example backend/.env
+
+
+================================================================================
+SECTION 3: EDIT ENVIRONMENT VARIABLES (Manual Step)
+================================================================================
+
+nano backend/.env
+
+# ADD YOUR API KEYS:
+# DEEPGRAM_API_KEY=sk-...your_key...
+# GOOGLE_API_KEY=...your_gemini_key...
+# PORT=7860
+
+# Save: Ctrl+X, then Y, then Enter
+
+
+================================================================================
+SECTION 4: BACKEND SETUP
+================================================================================
+
+cd /root/spellbee/backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+deactivate
+
+
+================================================================================
+SECTION 5: FRONTEND SETUP
+================================================================================
+
+cd /root/spellbee/frontend
+npm install
+npm run build
+
+
+================================================================================
+SECTION 6: SETUP SERVICES & NGINX (Automated Script)
+================================================================================
+
+cd /root/spellbee
+chmod +x SETUP_SERVICES_NGINX.sh
+sudo bash SETUP_SERVICES_NGINX.sh
+
+
+================================================================================
+SECTION 7: MAKE STARTUP SCRIPT EXECUTABLE
+================================================================================
+
+chmod +x /root/spellbee/start-backend.sh
+
+
+================================================================================
+SECTION 8: START SERVICES
+================================================================================
+
+sudo systemctl start spellbee-backend
+sudo systemctl start spellbee-frontend
+sudo systemctl status spellbee
+
+
+================================================================================
+SECTION 9: SETUP SSL CERTIFICATE
+================================================================================
+
+sudo certbot certonly --nginx -d spellbee.pawanpatra.com
+
+
+================================================================================
+SECTION 10: VERIFY DEPLOYMENT
+================================================================================
+
+# Check services
+sudo systemctl status spellbee
+
+# Check backend health
+curl http://127.0.0.1:7860/api/health
+
+# Check HTTPS
+curl -I https://spellbee.pawanpatra.com/api/health
+
+# View logs
+sudo journalctl -u spellbee-backend -f
+
+
+================================================================================
+ALTERNATIVE: IF SETUP_SERVICES_NGINX.sh DOESN'T WORK
+================================================================================
+
+# Manual Systemd Setup
+sudo cp /root/spellbee/spellbee-backend.service /etc/systemd/system/
+sudo cp /root/spellbee/spellbee-frontend.service /etc/systemd/system/
+sudo cp /root/spellbee/spellbee.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable spellbee-backend spellbee-frontend spellbee
+
+# Manual Nginx Setup
+sudo cp /root/spellbee/nginx.conf /etc/nginx/sites-available/spellbee
+sudo ln -sf /etc/nginx/sites-available/spellbee /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl reload nginx
+
+
+================================================================================
+QUICK VERIFICATION (Copy entire block and paste)
+================================================================================
+
+echo "=== Service Status ===" && \
+sudo systemctl status spellbee --no-pager && \
+echo "" && \
+echo "=== Backend Health ===" && \
+curl -s http://127.0.0.1:7860/api/health && \
+echo "" && \
+echo "=== Ports Listening ===" && \
+sudo ss -tlnp | grep -E '7860|5173' && \
+echo "" && \
+echo "=== Nginx Test ===" && \
+sudo nginx -t
+
+
+================================================================================
+USEFUL COMMANDS (After Deployment)
+================================================================================
+
+# View logs
+sudo journalctl -u spellbee-backend -f
+sudo journalctl -u spellbee-frontend -f
+sudo journalctl -u nginx -f
+
+# Restart services
+sudo systemctl restart spellbee
+sudo systemctl restart spellbee-backend
+sudo systemctl restart spellbee-frontend
+
+# Stop services
+sudo systemctl stop spellbee
+
+# Check all listening ports
+sudo ss -tlnp
+
+# Test both projects
+curl -I https://spellbee.pawanpatra.com
+curl -I https://support.pawanpatra.com
+
+# View certificate expiry
+sudo certbot certificates
+
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+# If backend won't start
+sudo journalctl -u spellbee-backend -n 50
+cat /root/spellbee/backend/.env
+source /root/spellbee/backend/venv/bin/activate
+python /root/spellbee/backend/app/main.py
+
+# If frontend won't start
+sudo journalctl -u spellbee-frontend -f
+cd /root/spellbee/frontend && npm run build
+
+# If Nginx config error
+sudo nginx -t
+sudo cat /etc/nginx/sites-available/spellbee
+
+# If port in use
+sudo lsof -i :7860
+sudo kill -9 <PID>
+
+# Check disk space
+df -h
+
+# Check memory
+free -h
+
+
+================================================================================
+COMPLETE ONE-LINER (If you want to paste everything at once)
+================================================================================
+
+sudo apt update && \
+sudo apt install -y python3 python3-venv python3-pip nodejs npm nginx certbot python3-certbot-nginx curl git redis-server && \
+cd /root && \
+git clone https://github.com/YOUR_USER/Spellbee-aivoice-game.git spellbee && \
+cd spellbee && \
+cp .env.example backend/.env && \
+echo "❌ STOP HERE - Edit backend/.env with your API keys first!" && \
+echo "   nano backend/.env" && \
+echo "   Then run the rest of the commands in SECTION 4 onwards"
+
+
+================================================================================
+END OF COMMANDS
+================================================================================
+
+For detailed explanations, read:
+- DEPLOYMENT_SUMMARY.md
+- DEPLOY_BOTH.md
+- COMMANDS.md
+- SSL_SETUP.md
