@@ -1,0 +1,25 @@
+[Unit]
+Description=Spellbee AI Voice Game Application
+After=network.target
+
+[Service]
+Type=simple
+User=appuser
+WorkingDirectory=/opt/spellbee-aivoice
+ExecStart=/usr/bin/python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+# Environment variables
+Environment="PYTHONUNBUFFERED=1"
+Environment="PYTHONDONTWRITEBYTECODE=1"
+EnvironmentFile=/etc/spellbee-aivoice/.env
+
+# Resource limits
+MemoryLimit=1G
+CPUQuota=200%
+
+[Install]
+WantedBy=multi-user.target

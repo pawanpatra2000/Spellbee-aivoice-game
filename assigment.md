@@ -7,8 +7,7 @@ Build a voice-based Spell Bee bot using the Pipecat framework. The bot should co
 
 ### What You Need to Build
 - **Voice Bot Backend:** A Pipecat-based pipeline that picks a word, speaks it to the user, listens to the user spell it, and validates the spelling. Handle turn-taking and interruptions gracefully.
-- **Frontend:** A minimal web UI to start/join the spell bee session and display game state (current score, word count, etc.). Can be as simple as a single page.
-
+- **Frontend:** A minimal web UI to start/join the spell bee session and display game state (current score, word count, etc.). Can be as simple as a single page
 ### Technical Requirements
 - Use Pipecat as the core framework for the voice pipeline.
 - Implement proper turn-taking — the bot should wait for the user to finish spelling before evaluating.
